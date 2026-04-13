@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow' version '9.4.0'
+}
+
+group = 'burpdb'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly 'net.portswigger.burp.extensions:montoya-api:2024.12'
+    implementation 'org.xerial:sqlite-jdbc:3.51.3.0'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+jar {
+    archiveClassifier.set('thin')
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+assemble.dependsOn shadowJar
