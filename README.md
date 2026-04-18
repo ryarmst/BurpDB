@@ -49,6 +49,24 @@ try (var conn = java.sql.DriverManager.getConnection(System.getProperty("burp.db
 
 Keep `details` concise and avoid storing secrets or full raw payloads unless you explicitly want them in the shared database.
 
+## Building and releasing
+
+The project uses Gradle with the Shadow plugin to produce a fat JAR. To build locally:
+
+```bash
+./gradlew shadowJar
+# output: build/libs/BurpDB-<version>.jar
+```
+
+GitHub Actions automatically builds and publishes a release when a version tag is pushed:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Tags must follow the `v*` pattern (e.g. `v0.1.0`, `v1.2.3`). The release will include the fat JAR and auto-generated release notes from commits since the previous tag.
+
 ## Default tables
 
 - `kv(key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER)`
