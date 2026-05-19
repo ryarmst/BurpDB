@@ -6,10 +6,15 @@ import burp.api.montoya.MontoyaApi;
 import javax.swing.SwingUtilities;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 
 public final class BurpDbExtension implements BurpExtension
 {
     private BurpDbService service;
+    private Driver registeredShim;
+    private Driver registeredRealDriver;
 
     @Override
     public void initialize(MontoyaApi api)
@@ -19,8 +24,17 @@ public final class BurpDbExtension implements BurpExtension
         try
         {
             Class.forName("org.sqlite.JDBC");
+            Driver realDriver = DriverManager.getDriver("jdbc:sqlite:");
+            this.registeredRealDriver = realDriver;
+            BurpDbDriverShim shim = new BurpDbDriverShim(realDriver);
+            DriverManager.registerDriver(shim);
+            this.registeredShim = shim;
+            api.logging().logToOutput("BurpDB registered SQLite DriverShim with system DriverManager.");
+
+            System.setProperty(BurpDbService.DB_DRIVER_PROPERTY, BurpDbService.SQLITE_DRIVER_CLASS);
 
             this.service = new BurpDbService(api.persistence().preferences(), api.logging());
+            service.claimDriverProperty();
             BurpDbService.DatabaseLocation initialLocation = service.initializePath();
 
             BurpDbTab tab = new BurpDbTab(api, service, api.logging());
@@ -40,6 +54,29 @@ public final class BurpDbExtension implements BurpExtension
                     }));
 
             api.extension().registerUnloadingHandler(() -> {
+                if (registeredShim != null)
+                {
+                    try
+                    {
+                        DriverManager.deregisterDriver(registeredShim);
+                        api.logging().logToOutput("BurpDB deregistered SQLite DriverShim.");
+                    }
+                    catch (SQLException e)
+                    {
+                        api.logging().logToOutput("BurpDB could not deregister DriverShim: " + e.getMessage());
+                    }
+                }
+                if (registeredRealDriver != null)
+                {
+                    try
+                    {
+                        DriverManager.deregisterDriver(registeredRealDriver);
+                    }
+                    catch (SQLException e)
+                    {
+                        api.logging().logToOutput("BurpDB could not deregister SQLite driver: " + e.getMessage());
+                    }
+                }
                 if (service != null)
                 {
                     service.shutdown();

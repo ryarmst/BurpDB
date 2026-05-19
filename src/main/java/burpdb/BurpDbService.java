@@ -26,6 +26,8 @@ import java.util.function.Consumer;
 final class BurpDbService
 {
     static final String DB_URL_PROPERTY = "burp.db.url";
+    static final String DB_DRIVER_PROPERTY = "burp.db.driver";
+    static final String SQLITE_DRIVER_CLASS = "org.sqlite.JDBC";
     static final String DB_PATH_PREFERENCE = "burpdb.path";
     static final int MAX_RENDERED_ROWS = 10_000;
     private static final int TARGET_USER_VERSION = 1;
@@ -67,6 +69,7 @@ final class BurpDbService
     private final AtomicReference<Path> currentDatabasePath;
     private final AtomicReference<String> currentJdbcUrl;
     private final AtomicReference<String> ownedJdbcUrl;
+    private final AtomicReference<String> ownedDriverClass;
 
     BurpDbService(Preferences preferences, Logging logging)
     {
@@ -76,6 +79,12 @@ final class BurpDbService
         this.currentDatabasePath = new AtomicReference<>();
         this.currentJdbcUrl = new AtomicReference<>();
         this.ownedJdbcUrl = new AtomicReference<>();
+        this.ownedDriverClass = new AtomicReference<>();
+    }
+
+    void claimDriverProperty()
+    {
+        ownedDriverClass.set(SQLITE_DRIVER_CLASS);
     }
 
     DatabaseLocation initializePath() throws IOException
@@ -191,6 +200,18 @@ final class BurpDbService
         else
         {
             logging.logToOutput("BurpDB unload cleanup left burp.db.url unchanged because another owner replaced it.");
+        }
+
+        String ownedDriver = ownedDriverClass.get();
+        String currentDriver = System.getProperty(DB_DRIVER_PROPERTY);
+        if (ownedDriver != null && Objects.equals(ownedDriver, currentDriver))
+        {
+            System.clearProperty(DB_DRIVER_PROPERTY);
+            logging.logToOutput("BurpDB unload cleanup removed the burp.db.driver property.");
+        }
+        else
+        {
+            logging.logToOutput("BurpDB unload cleanup left burp.db.driver unchanged because another owner replaced it.");
         }
 
         executorService.shutdownNow();
