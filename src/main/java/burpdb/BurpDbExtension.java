@@ -26,6 +26,8 @@ public final class BurpDbExtension implements BurpExtension
             Class.forName("org.sqlite.JDBC");
             Driver realDriver = DriverManager.getDriver("jdbc:sqlite:");
             this.registeredRealDriver = realDriver;
+            System.getProperties().put(BurpDbService.DB_DRIVER_INSTANCE_PROPERTY, realDriver);
+            api.logging().logToOutput("BurpDB published driver instance as " + BurpDbService.DB_DRIVER_INSTANCE_PROPERTY);
             BurpDbDriverShim shim = new BurpDbDriverShim(realDriver);
             DriverManager.registerDriver(shim);
             this.registeredShim = shim;
@@ -35,6 +37,7 @@ public final class BurpDbExtension implements BurpExtension
 
             this.service = new BurpDbService(api.persistence().preferences(), api.logging());
             service.claimDriverProperty();
+            service.claimDriverInstance();
             BurpDbService.DatabaseLocation initialLocation = service.initializePath();
 
             BurpDbTab tab = new BurpDbTab(api, service, api.logging());
@@ -77,6 +80,8 @@ public final class BurpDbExtension implements BurpExtension
                         api.logging().logToOutput("BurpDB could not deregister SQLite driver: " + e.getMessage());
                     }
                 }
+                System.getProperties().remove(BurpDbService.DB_DRIVER_INSTANCE_PROPERTY);
+                api.logging().logToOutput("BurpDB removed driver instance from system properties.");
                 if (service != null)
                 {
                     service.shutdown();
@@ -85,7 +90,7 @@ public final class BurpDbExtension implements BurpExtension
             });
 
             api.logging().logToOutput("BurpDB loaded successfully.");
-            api.logging().raiseInfoEvent("BurpDB is ready. Bambdas can use burp.db.url.");
+            api.logging().raiseInfoEvent("BurpDB is ready. Bambdas can use burp.db.driver.instance.");
         }
         catch (Throwable throwable)
         {

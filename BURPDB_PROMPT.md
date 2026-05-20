@@ -14,12 +14,18 @@ Build a Burp Suite Montoya extension called `BurpDB` that gives Bambda scripts a
 ## Core mechanic
 
 - In `initialize(MontoyaApi api)`, call `api.extension().setName("BurpDB")`.
-- Call `Class.forName("org.sqlite.JDBC")` during initialization so the SQLite JDBC driver is registered JVM-wide.
+- Call `Class.forName("org.sqlite.JDBC")` during initialization so the SQLite JDBC driver is registered for use inside the extension.
+- Load the real `Driver` instance and publish it in `System.getProperties()` under `burp.db.driver.instance`. Bambdas must call `driver.connect()` directly — `DriverManager.getConnection()` fails from Bambdas because Java 9+ caller-sensitivity checks reject drivers registered by sibling classloaders.
+- Also register a `DriverShim` with `DriverManager` for extension-internal use and potential future compatibility.
 - Resolve the database path immediately after reading preferences, then set the system property `burp.db.url` to `jdbc:sqlite:<resolved-path>`.
-- Bambdas anywhere in the Burp session must be able to connect with:
+- Bambdas anywhere in the Burp session must connect with:
 
 ```java
-DriverManager.getConnection(System.getProperty("burp.db.url"))
+var driver = (java.sql.Driver) System.getProperties().get("burp.db.driver.instance");
+String dbUrl = System.getProperty("burp.db.url");
+try (var conn = driver.connect(dbUrl, new java.util.Properties())) {
+    // use conn
+}
 ```
 
 - There must be no manual driver JAR placement, custom classpath setup, or hard-coded absolute path in Bambdas.
@@ -82,6 +88,8 @@ CREATE INDEX IF NOT EXISTS idx_findings_created_at ON findings(created_at);
 - Since there is no shared connection, unload should not try to close a global `Connection`.
 - Unload must clean up only JVM-wide side effects created by this extension:
   - remove `burp.db.url` only if this instance still owns it
+  - remove `burp.db.driver.instance` from `System.getProperties()`
+  - deregister the `DriverShim` from `DriverManager`
   - log that cleanup occurred
 
 ## Burp tab
@@ -135,8 +143,8 @@ Do not log SQL query results or other potentially sensitive database contents.
 
 - Burp can load the extension by selecting only the shaded output JAR.
 - No external SQLite JDBC JAR is required anywhere on disk beyond what is bundled in the extension.
-- On startup, the extension resolves the DB path, creates parent directories if needed, publishes `burp.db.url`, and initializes the schema automatically.
-- A Bambda in the same Burp session can successfully run `DriverManager.getConnection(System.getProperty("burp.db.url"))`.
+- On startup, the extension resolves the DB path, creates parent directories if needed, publishes `burp.db.url` and `burp.db.driver.instance`, and initializes the schema automatically.
+- A Bambda in the same Burp session can successfully open a connection via `driver.connect(System.getProperty("burp.db.url"), new java.util.Properties())` using the driver instance from `System.getProperties().get("burp.db.driver.instance")`.
 - Changing the DB path in the Burp tab updates preferences, updates `burp.db.url`, and affects subsequent UI and Bambda connections.
 - The SQL tab can execute both `SELECT` and non-`SELECT` statements safely.
 - Large result sets do not freeze the Burp UI.

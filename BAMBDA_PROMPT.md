@@ -1,7 +1,6 @@
 
 Rules:
-- Open the database with `DriverManager.getConnection(System.getProperty("burp.db.url"))`. BurpDB registers a JDBC `DriverShim` at load time so this works directly from Bambdas — no extra driver JAR, classpath tricks, or `Class.forName` calls are required.
-- Optionally verify BurpDB is loaded with `System.getProperty("burp.db.driver")` (expect `org.sqlite.JDBC`) before opening a connection.
+- Open the database via the `Driver` instance BurpDB publishes in `System.getProperties()`. Do **not** use `DriverManager.getConnection()` from a Bambda — Java 9+ caller-sensitivity checks block drivers registered by the extension classloader.
 - Use `try-with-resources` for every `Connection`, `Statement`, `PreparedStatement`, and `ResultSet`.
 - Do not hard-code DB paths or require any external JDBC JAR.
 - Assume these tables exist: `kv(key, value, updated_at)`, `findings(id, host, issue, detail, severity, created_at)`, and `logs(created_at, reporter, details)`.
@@ -11,3 +10,20 @@ Rules:
   - `details =` a short human-readable message
 - Prefer `PreparedStatement` for inserts/updates.
 - Keep logged details concise and avoid secrets unless explicitly requested.
+
+Connection pattern:
+
+```java
+var driver = (java.sql.Driver) System.getProperties().get("burp.db.driver.instance");
+if (driver == null) {
+    // BurpDB extension is not loaded or hasn't finished initializing.
+    return;
+}
+String dbUrl = System.getProperty("burp.db.url");
+if (dbUrl == null || dbUrl.isBlank()) {
+    return;
+}
+try (var conn = driver.connect(dbUrl, new java.util.Properties())) {
+    // use conn — standard JDBC from here
+}
+```

@@ -58,14 +58,17 @@ The project uses Gradle with the Shadow plugin to produce a fat JAR. To build lo
 # output: build/libs/BurpDB-<version>.jar
 ```
 
-GitHub Actions automatically builds and publishes a release when a version tag is pushed:
+GitHub Actions automatically builds and publishes a release when a version tag is pushed. The JAR filename is derived from the tag (without the leading `v`):
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v0.2.0
+git push origin v0.2.0
+# produces: build/libs/BurpDB-0.2.0.jar
 ```
 
 Tags must follow the `v*` pattern (e.g. `v0.1.0`, `v1.2.3`). The release will include the fat JAR and auto-generated release notes from commits since the previous tag.
+
+For local builds, the version comes from `build.gradle` (currently `0.2.0`). Override with `-PreleaseVersion=0.3.0` if needed.
 
 ## Default tables
 
